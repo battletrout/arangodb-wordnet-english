@@ -6,6 +6,9 @@ class NotXMLFileError(Exception):
 class IncorrectRelationshipError(Exception):
     pass
 
+class UnexpectedWordNetXMLElement(Exception):
+    pass
+
 class WordNetXMLParser:
     '''
     Created by Nathan Kemp on 6 Jan, 2023 to parse the Open English WordNet wn.xml file
@@ -60,30 +63,36 @@ class WordNetXMLParser:
         self.edge_list = []
     
     def parse(self):
+        '''
+        Top-level wrapper that calls the other parsing functions.
+        '''
+
         self.extract_xml_top_level()
 
-        for child in self.root[0][0:5005]:
+        for child in self.root[0]:
             # Child-level tags are LexicalEntry and Synset.
             if child.tag == 'LexicalEntry':
                 self.parse_lexical_entry(child)
-            # print(child.tag, child.attrib)
-            
-            
-            
-            # for grandchild in child:
-            #     print(grandchild.tag, grandchild.attrib)
-            #     for grandgrandchild in grandchild:
-            #         print(grandgrandchild.tag, grandgrandchild.attrib)
-            # print()
+            elif child.tag == 'Synset':
+                self.parse_synset(child)
+            else:
+                raise UnexpectedWordNetXMLElement('The tag is not a LexicalEntry or Synset.')
+        
+        pass
     
-
-
-    # Extract the WordNet header information (lang, version, etc.)
     def extract_xml_top_level(self):
+        '''
+        Extracts the top-level information from the WordNet XML file (lang, version, etc.).
+        '''
         return self.root[0].attrib
 
     def parse_lexical_entry(self, lexical_entry):
-        
+        '''
+        call when tag is lexical entry. 
+        1. Creates a lexical entry node and adds it to the lex_entry_dict.
+        2. Creates sense nodes and adds them to the sense_id_dict.
+        3. Records edges between the sense nodes, lexical entry nodes, synsets, and other sense nodes.  
+        '''      
         # Extract the lexical entry ID.
         lex_entry_id = lexical_entry.attrib['id']
         
@@ -103,7 +112,6 @@ class WordNetXMLParser:
                 sense_id = child.attrib['id']
                 # add the sense to the sense dict
                 self.sense_id_dict[sense_id] = child.attrib #ensure all attributes are included.
-                # self.sense_id_dict[sense_id].pop('synset') #remove synset, as that's a relationship.
                 # add written form and pos to sense_id_dict if specified.
                 if self.written_form_in_sense_id: self.sense_id_dict[sense_id]['writtenForm'] = lex_written_form
                 if self.pos_in_sense_id: self.sense_id_dict[sense_id]['partOfSpeech'] = lex_pos
@@ -129,17 +137,47 @@ class WordNetXMLParser:
                 print(self.lex_entry_dict[lex_entry_id])
 
             else:
-                raise ValueError('Unexpected tag in lexical entry: {}'.format(child.tag))
+                raise UnexpectedWordNetXMLElement('Unexpected tag in lexical entry: {}'.format(child.tag))
 
 
-    def add_sense_ids(self, lexical_entry):
-        # Senses of words are stored in a dict with the sense ID as the key.
-        # Each sense ID has a dict of its own, which will store the word, POS, and synset ID.
-        
-        self.sense_id_dict[sense_id] = {}
+    def parse_synset(self, synset):
+        '''
+        call when tag is synset.
+        1. Creates a synset node and adds it to the synset_dict.
+        2. Creates entries in the edge_list for the synsets' relationships.
+        '''
+        # Extract the synset ID.
+        synset_id = synset.attrib['id']
+        self.synset_dict[synset_id] = synset.attrib
+
+        # Create a list for holding this synset's examples (to allow multiple examples for each synset).
+        self.synset_dict[synset_id]['Examples'] = []
+
+        for child in synset:
+            if child.tag == 'Definition':
+                # add the def to the synset_dict.
+                self.synset_dict[synset_id]['Definition'] = child.text
+
+            elif child.tag == 'ILIDefinition':
+                # add the ILIdef to the synset_dict.
+                self.synset_dict[synset_id]['ILIDefinition'] = child.text
+
+            elif child.tag == 'SynsetRelation':
+                # add the relationship to the edge dict.
+                self.add_edge(synset_id, child.attrib['target'], child.attrib['relType'])
+                print(synset_id, child.attrib['target'], child.attrib['relType'])
+                print(self.edge_list[-1])            
+            
+            elif child.tag == 'Example':
+                # add the example to the synset_dict['Examples'] list.
+                self.synset_dict[synset_id]['Examples'].append(child.text)
+
+            else:
+                raise UnexpectedWordNetXMLElement('Unexpected tag in synset entry: {}'.format(child.tag))    
 
     def add_edge(self, source, target, relType):
-        self.edge_list.append({'source': source, 'target': target, 'relType': relType})
+        # Add the edge to the edge list. Format is a dict with keys _from, _to, and _type, necessary for arango import.
+        self.edge_list.append({'_from': source, '_to': target, '_type': relType})
 
     def print_all(self):
         print(self.wordnet_set_info)
