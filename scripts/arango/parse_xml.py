@@ -30,15 +30,15 @@ class WordNetXMLParser:
     
     '''
  
-    def __init__(self, xml_file, written_form_in_sense_id=True, pos_in_sense_id=True):
+    def __init__(self, xml_filepath, written_form_in_sense_id=True, pos_in_sense_id=True):
         # Check that the file is a WordNet XML file.
         self.written_form_in_sense_id = written_form_in_sense_id
         self.pos_in_sense_id = pos_in_sense_id
         
-        if not xml_file.endswith('.xml'):
+        if not xml_filepath.endswith('.xml'):
             raise NotXMLFileError('The file is not a XML file.')
-        with open(xml_file, 'r') as f:
-            self.tree = ET.parse(xml_file)
+        with open(xml_filepath, 'r') as f:
+            self.tree = ET.parse(f)
         self.root = self.tree.getroot()
 
         # The set info dict will store the WordNet set information, such as the /
