@@ -11,6 +11,7 @@ def connect_to_arangodb(arangoURL='http://127.0.0.1:8529', username='wordnet_use
     '''
     
     conn = Connection(arangoURL, username, password)
+
     return conn
 
 
@@ -27,9 +28,13 @@ def conn_validation(conn, db_name):
     if not db.hasCollection('users'):
         db.createCollection(name="users") # all collections are also loaded automatically
     collection = db["users"]
+    
+
+
 
     for i in range(100):
-        doc = collection.createDocument()
+        doc = collection.createDocument({'_key': f"lessers{i}", 'cat' : 'meow'})
+        #collection.createRel
         doc["name"] = f"Tesla-{i}"
         doc["number"] = i
         doc["species"] = "human"
@@ -41,6 +46,7 @@ def conn_validation(conn, db_name):
     doc["species"] = "human"
 
 if __name__ == '__main__':
-    print(connect_to_arangodb.__doc__)
+    conn = connect_to_arangodb()
+    conn_validation(conn, 'test_db')
     # conn = create_connection()
     # conn_validation(conn, 'wordnet_db')

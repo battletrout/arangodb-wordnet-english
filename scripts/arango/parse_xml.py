@@ -1,13 +1,6 @@
 import xml.etree.ElementTree as ET
 
-class NotXMLFileError(Exception):
-    pass
 
-class IncorrectRelationshipError(Exception):
-    pass
-
-class UnexpectedWordNetXMLElement(Exception):
-    pass
 
 class WordNetXMLParser:
     '''
@@ -29,6 +22,15 @@ class WordNetXMLParser:
     pos_in_sense_id, determines whether the part of speech is included in the sense ID. Default True.
     
     '''
+
+    class NotXMLFileError(Exception):
+        pass
+
+    class IncorrectRelationshipError(Exception):
+        pass
+
+    class UnexpectedWordNetXMLElement(Exception):
+        pass
  
     def __init__(self, xml_filepath, written_form_in_sense_id=True, pos_in_sense_id=True):
         # Check that the file is a WordNet XML file.
@@ -36,7 +38,7 @@ class WordNetXMLParser:
         self.pos_in_sense_id = pos_in_sense_id
         
         if not xml_filepath.endswith('.xml'):
-            raise NotXMLFileError('The file is not a XML file.')
+            raise WordNetXMLParser.NotXMLFileError('The file is not a XML file.')
         with open(xml_filepath, 'r') as f:
             self.tree = ET.parse(f)
         self.root = self.tree.getroot()
@@ -62,6 +64,13 @@ class WordNetXMLParser:
         # edge_list is a list of dicts where values are source, type (of relationship), and target.
         self.edge_list = []
     
+    def replace_disallowed_chars(self, string):
+        '''
+        Replaces disallowed apostrophe character with single quote.
+        '''
+        string = string.replace('`',"'")
+        return string
+
     def parse(self):
         '''
         Top-level wrapper that calls the other parsing functions.
@@ -75,8 +84,11 @@ class WordNetXMLParser:
                 self.parse_lexical_entry(child)
             elif child.tag == 'Synset':
                 self.parse_synset(child)
+            elif child.tag == 'SyntacticBehaviour':
+                # Pass for now, don't have a plan for this yet.
+                pass
             else:
-                raise UnexpectedWordNetXMLElement('The tag is not a LexicalEntry or Synset.')
+                raise WordNetXMLParser.UnexpectedWordNetXMLElement('The tag is not a LexicalEntry or Synset.')
         
         pass
     
@@ -94,7 +106,7 @@ class WordNetXMLParser:
         3. Records edges between the sense nodes, lexical entry nodes, synsets, and other sense nodes.  
         '''      
         # Extract the lexical entry ID.
-        lex_entry_id = lexical_entry.attrib['id']
+        lex_entry_id = self.replace_disallowed_chars(lexical_entry.attrib['id'])
         
         # Extract lemmas and senses. Lemmas will be properties in the current lex_entry,
         # senses will be appended to the sense dict.
@@ -109,7 +121,7 @@ class WordNetXMLParser:
             
             
             elif child.tag == 'Sense':
-                sense_id = child.attrib['id']
+                sense_id = self.replace_disallowed_chars(child.attrib['id'])
                 # add the sense to the sense dict
                 self.sense_id_dict[sense_id] = child.attrib #ensure all attributes are included.
                 # add written form and pos to sense_id_dict if specified.
@@ -129,15 +141,15 @@ class WordNetXMLParser:
                         # add the relationship to the edge dict.
                         # edge_dict key is source, value is a dict with keys type (of relationship) and target.
                         self.add_edge(sense_id, grandchild.attrib['target'], grandchild.attrib['relType'])
-                        print(sense_id, grandchild.attrib['target'], grandchild.attrib['relType'])
-                        print(self.edge_list[-1])
+                        # print(sense_id, grandchild.attrib['target'], grandchild.attrib['relType'])
+                        # print(self.edge_list[-1])
 
             elif child.tag == 'Form':
                 self.lex_entry_dict[lex_entry_id] = {**self.lex_entry_dict[lex_entry_id],**child.attrib}
-                print(self.lex_entry_dict[lex_entry_id])
+                # print(self.lex_entry_dict[lex_entry_id])
 
             else:
-                raise UnexpectedWordNetXMLElement('Unexpected tag in lexical entry: {}'.format(child.tag))
+                raise WordNetXMLParser.UnexpectedWordNetXMLElement('Unexpected tag in lexical entry: {}'.format(child.tag))
 
 
     def parse_synset(self, synset):
@@ -147,7 +159,7 @@ class WordNetXMLParser:
         2. Creates entries in the edge_list for the synsets' relationships.
         '''
         # Extract the synset ID.
-        synset_id = synset.attrib['id']
+        synset_id = self.replace_disallowed_chars(synset.attrib['id'])
         self.synset_dict[synset_id] = synset.attrib
 
         # Create a list for holding this synset's examples (to allow multiple examples for each synset).
@@ -165,19 +177,19 @@ class WordNetXMLParser:
             elif child.tag == 'SynsetRelation':
                 # add the relationship to the edge dict.
                 self.add_edge(synset_id, child.attrib['target'], child.attrib['relType'])
-                print(synset_id, child.attrib['target'], child.attrib['relType'])
-                print(self.edge_list[-1])            
+                # print(synset_id, child.attrib['target'], child.attrib['relType'])
+                # print(self.edge_list[-1])            
             
             elif child.tag == 'Example':
                 # add the example to the synset_dict['Examples'] list.
                 self.synset_dict[synset_id]['Examples'].append(child.text)
 
             else:
-                raise UnexpectedWordNetXMLElement('Unexpected tag in synset entry: {}'.format(child.tag))    
+                raise WordNetXMLParser.UnexpectedWordNetXMLElement('Unexpected tag in synset entry: {}'.format(child.tag))    
 
     def add_edge(self, source, target, relType):
         # Add the edge to the edge list. Format is a dict with keys _from, _to, and _type, necessary for arango import.
-        self.edge_list.append({'_from': source, '_to': target, '_type': relType})
+        self.edge_list.append({'_from': source, '_to': self.replace_disallowed_chars(target), '_type': relType})
 
     def print_all(self):
         print(self.wordnet_set_info)
