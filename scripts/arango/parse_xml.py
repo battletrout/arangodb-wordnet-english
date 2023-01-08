@@ -8,8 +8,6 @@ class WordNetXMLParser:
     into a dicts that can be used to easily put into an ArangoDB properties graph.
     May simplify working with other graph dbs such as Neo4j, too, but not tried yet.
 
-    NOTE: Pronunciation is dropped, as it is UTF-16 and not supported in ArangoDB queries.
-
     To compile [the .yaml into a] single [.xml] file please use the following script(s)
 
         python scripts/from-yaml.py
@@ -22,6 +20,9 @@ class WordNetXMLParser:
     pos_in_sense_id, determines whether the part of speech is included in the sense ID. Default True.
     
     '''
+    # Disallowed character list has tuples of characters that are not allowed in Arango node IDs, with their replacement.
+    # used in the replace_disallowed_chars() method.
+    disallowed_char_list = [('`',"'"),('ñ','n')]
 
     class NotXMLFileError(Exception):
         pass
@@ -60,16 +61,19 @@ class WordNetXMLParser:
         self.sense_id_dict = {}
         self.lex_entry_dict = {}
         self.synset_dict = {}
+        self.syntactic_behaviour_dict = {}
 
         # edge_list is a list of dicts where values are source, type (of relationship), and target.
         self.edge_list = []
     
-    def replace_disallowed_chars(self, string):
+    def replace_disallowed_chars(self, string_, disallowed_chars=disallowed_char_list):
         '''
-        Replaces disallowed apostrophe character with single quote.
+        Takes a list of tuples; tuples are (disallowed character, replacement character).
+        This is used to replace characters that are not UTF-8 for ArangoDB node IDs.
         '''
-        string = string.replace('`',"'")
-        return string
+        for char_tuple in disallowed_chars:
+            string_ = string_.replace(char_tuple[0],char_tuple[1])
+        return string_
 
     def parse(self):
         '''
@@ -85,8 +89,7 @@ class WordNetXMLParser:
             elif child.tag == 'Synset':
                 self.parse_synset(child)
             elif child.tag == 'SyntacticBehaviour':
-                # Pass for now, don't have a plan for this yet.
-                pass
+                self.parse_syntactic_behaviour(child)
             else:
                 raise WordNetXMLParser.UnexpectedWordNetXMLElement('The tag is not a LexicalEntry or Synset.')
         
@@ -117,8 +120,13 @@ class WordNetXMLParser:
                 lex_written_form = str(child.attrib['writtenForm'])
                 lex_pos = str(child.attrib['partOfSpeech'])
                 # add the lemma to the lex_entry_dict.
+                # also add the id as a specific
                 self.lex_entry_dict[lex_entry_id] = {'writtenForm' : lex_written_form, 'partOfSpeech' : lex_pos}
-            
+                # Add pronunciation to lex_entry_dict if specified.
+                for grandchild in child:
+                    if grandchild.tag == 'Pronunciation':
+                        self.lex_entry_dict[lex_entry_id]['Pronunciation'] = grandchild.text
+                    #print(self.lex_entry_dict[lex_entry_id]['Pronunciation'])
             
             elif child.tag == 'Sense':
                 sense_id = self.replace_disallowed_chars(child.attrib['id'])
@@ -129,18 +137,22 @@ class WordNetXMLParser:
                 if self.pos_in_sense_id: self.sense_id_dict[sense_id]['partOfSpeech'] = lex_pos
 
                 # add the sense to synset to the edge dict.
-                self.add_edge(sense_id, child.attrib['synset'], 'synset_member_of') 
+                self.add_edge(sense_id, child.attrib['synset'], 'synset_member_of', 'sense_to_synset') 
 
                 # add the sense to lexical_entry relationship to the edge dict.
-                self.add_edge(sense_id, lex_entry_id, 'lex_member_of')
+                self.add_edge(sense_id, lex_entry_id, 'lex_member_of', 'sense_to_lex_entry')
 
-                # check if the tag has any SenseRelationships
+                # add the sense to verb subcat relationship to the edge dict, if specified.
+                if 'subcat' in child.attrib:
+                    self.add_edge(sense_id, child.attrib['subcat'], 'verb_subcat_of', 'sense_to_verb_subcat')
+
+                # check if the tag has any SenseRelationships or verb subcategories.
                 # if so, add to the edge dict.
                 for grandchild in child:
                     if grandchild.tag == 'SenseRelation':
                         # add the relationship to the edge dict.
                         # edge_dict key is source, value is a dict with keys type (of relationship) and target.
-                        self.add_edge(sense_id, grandchild.attrib['target'], grandchild.attrib['relType'])
+                        self.add_edge(sense_id, grandchild.attrib['target'], grandchild.attrib['relType'],'sense_to_sense')
                         # print(sense_id, grandchild.attrib['target'], grandchild.attrib['relType'])
                         # print(self.edge_list[-1])
 
@@ -176,7 +188,7 @@ class WordNetXMLParser:
 
             elif child.tag == 'SynsetRelation':
                 # add the relationship to the edge dict.
-                self.add_edge(synset_id, child.attrib['target'], child.attrib['relType'])
+                self.add_edge(synset_id, child.attrib['target'], child.attrib['relType'],'synset_to_synset')
                 # print(synset_id, child.attrib['target'], child.attrib['relType'])
                 # print(self.edge_list[-1])            
             
@@ -187,9 +199,20 @@ class WordNetXMLParser:
             else:
                 raise WordNetXMLParser.UnexpectedWordNetXMLElement('Unexpected tag in synset entry: {}'.format(child.tag))    
 
-    def add_edge(self, source, target, relType):
+    def parse_syntactic_behaviour(self, syntactic_behaviour):
+        '''
+        call when tag is syntacticBehaviour.
+        Creates a syntacticBehaviour node and adds it to the syntactic_behaviour_dict.
+        '''
+        # Extract the syntactic_behaviour ID.
+        syntactic_behaviour_id = syntactic_behaviour.attrib['id']
+        self.syntactic_behaviour_dict[syntactic_behaviour_id] = { \
+            'subcategorizationFrame' : syntactic_behaviour.attrib['subcategorizationFrame']}
+
+    def add_edge(self, source, target, relType, relCategory):
         # Add the edge to the edge list. Format is a dict with keys _from, _to, and _type, necessary for arango import.
-        self.edge_list.append({'_from': source, '_to': self.replace_disallowed_chars(target), '_type': relType})
+        # RelCategory is used when making the edge collection to append the collection name with the key.
+        self.edge_list.append({'relCategory': relCategory, '_from': source, '_to': self.replace_disallowed_chars(target), '_type': relType})
 
     def print_all(self):
         print(self.wordnet_set_info)
@@ -197,6 +220,10 @@ class WordNetXMLParser:
         print(self.lex_entry_dict)
         print()
         print(self.sense_id_dict)
+        print()
+        print(self.synset_dict)
+        print()
+        print(self.syntactic_behaviour_dict)
         print()
         print(self.edge_list)
         print()
