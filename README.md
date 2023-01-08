@@ -1,8 +1,14 @@
 # Scripts that make a property graph of Open English WordNet in ArangoDB from wn.xml
 
-Below is all from the original Open English WordNet repo at the time of fork:
+## Deviations from WordNet in the resulting ArangoDB:
+1. SenseIDs with disallowed characters are approximated to allowed characters (so far, ('`',"'") and ('ñ','n')). The unaltered SenseIDs are stored in the "id" parameter of the node. Per ArangoDB documentation https://www.arangodb.com/docs/stable/data-modeling-naming-conventions-document-keys.html, IDs:
+'''
+must consist of the letters a-z (lower or upper case), the digits 0-9 or any of the following punctuation characters: _ - : . @ ( ) + , = ; $ ! * ' %
+'''
 
-# Open English WordNet
+# Below is all from the original Open English WordNet repo at the time of fork:
+
+## Open English WordNet
 
 Open English WordNet is a lexical network of the English language grouping words into synsets and linking them according
 to relationships such as hypernymy, antonymy and meronymy. It is intended to be used in natural language processing 
