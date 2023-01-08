@@ -2,7 +2,7 @@ from pyArango.connection import *
 from pyArango.collection import Collection, Edges
 from arango_connect import connect_to_arangodb
 from parse_xml import WordNetXMLParser
-from time import datetime
+from datetime import datetime
 
 class ArangoDBGraphCreator:
     class UnexpectedRelationType(Exception):
@@ -56,11 +56,15 @@ class ArangoDBGraphCreator:
             'sense_to_synset' : (self.sense_id_collection.name, self.synset_collection.name)
             }
 
-    def parse_xml(self, xml_filepath:str):
-        self.xml_parser = WordNetXMLParser('wn.xml')
+    def parse_xml(self, xml_filepath:str,written_form_in_sense_id, pos_in_sense_id):
+        self.xml_parser = WordNetXMLParser(xml_filepath,written_form_in_sense_id, pos_in_sense_id)
         self.xml_parser.parse()
     
     def create_nodes_and_edges(self):
+
+        '''
+        creates nodes and edges in ArangoDB from the parsed XML's dictionaries and lists.
+        '''
         print(f'{datetime.now()}: adding items to sense_id_collection in ArangoDB')
         self.add_nodes_to_collection(self.sense_id_collection, self.xml_parser.sense_id_dict)
         
@@ -76,8 +80,7 @@ class ArangoDBGraphCreator:
         print(f'{datetime.now()}: Done, adding items to edge_collection in ArangoDB')
         self.add_edges_to_collection(self.edge_collection, self.xml_parser.edge_list, self.relation_type_collection_map)
 
-
-    def get_db(conn:Connection, db_name):
+    def get_db(self,conn:Connection, db_name):
         '''
         Input connection and db_name. Creates a new DB if doesn't exist, returns the db object.
         '''
@@ -86,7 +89,7 @@ class ArangoDBGraphCreator:
         db = conn[db_name] # all databases are loaded automatically into the connection and are accessible in this fashion
         return db
 
-    def get_collection(db:Database, collection_name):
+    def get_collection(self,db:Database, collection_name):
         '''
         Input db and collection_name. Creates a new collection if doesn't exist, returns the collection object.
         '''
@@ -95,7 +98,7 @@ class ArangoDBGraphCreator:
         collection = db[collection_name]
         return collection
 
-    def get_edge_collection(db:Database, collection_name):
+    def get_edge_collection(self,db:Database, collection_name):
         '''
         Input db and collection_name. Creates a new collection if doesn't exist, returns the collection object.
         '''
@@ -104,83 +107,41 @@ class ArangoDBGraphCreator:
         collection = db[collection_name]
         return collection
 
-    def add_nodes_to_collection(collection:Collection, nodes_to_add):
+    def add_nodes_to_collection(self,collection:Collection, nodes_to_add):
         for key, attributes in nodes_to_add.items():
             node_doc = collection.createDocument({'_key': key})
             for attribute, value in attributes.items():
                 node_doc[attribute] = value
             node_doc.save()
 
-    def add_edges_to_collection(collection:Edges, edge_list, relation_type_to_collection_map):
+    def add_edges_to_collection(self,collection:Edges, edge_list, relation_type_to_collection_map):
         for edge in edge_list:
             edge_doc = collection.createDocument()
             # append the collection name to the _from and _to fields
             try:
-                edge_doc['_from'] = f"{relation_type_to_collection_map[edge['relation_type']][0]}/{edge['_from']}"
-                edge_doc['_to'] = f"{relation_type_to_collection_map[edge['relation_type']][1]}/{edge['_to']}"
+                edge_doc['_from'] = f"{relation_type_to_collection_map[edge['relCategory']][0]}/{edge['_from']}"
+                edge_doc['_to'] = f"{relation_type_to_collection_map[edge['relCategory']][1]}/{edge['_to']}"
             except KeyError:
                 raise ArangoDBGraphCreator.UnexpectedRelationType(\
-                    f"{edge['relation_type'][0]} / \from: {edge['_from']} / to: {edge['_to']}")
+                    f"{edge['relCategory'][0]} / from: {edge['_from']} to: {edge['_to']}")
             edge_doc['_type'] = edge['_type']
             edge_doc.save()
-
-    # def add_all_sense_ids(collection:Collection, sense_id_dict):
-    #     for sense_id, attributes in sense_id_dict.items():
-    #         sense_doc = collection.createDocument({'_key': sense_id})
-    #         for attribute, value in attributes.items():
-    #             sense_doc[attribute] = value
-    #         sense_doc.save()
-
-    # def add_all_lex_entries(collection:Collection, lex_entry_dict):
-    #     for lex_entry, attributes in lex_entry_dict.items():
-    #         lex_doc = collection.createDocument({'_key': lex_entry})
-    #         for attribute, value in attributes.items():
-    #             lex_doc[attribute] = value
-    #         lex_doc.save()
-
-    # def add_all_synsets(collection, synset_dict):
-    #     for synset, attributes in synset_dict.items():
-    #         synset_doc = collection.createDocument({'_key': synset})
-    #         for attribute, value in attributes.items():
-    #             synset_doc[attribute] = value
-    #         synset_doc.save()
-
-    # def add_all_syntactic_behaviours(collection, syntactic_behaviour_dict):
-    #     for syntactic_behaviour, attributes in syntactic_behaviour_dict.items():
-    #         syntactic_behaviour_doc = collection.createDocument({'_key': syntactic_behaviour})
-    #         for attribute, value in attributes.items():
-    #             syntactic_behaviour_doc[attribute] = value
-    #         syntactic_behaviour_doc.save()
-
-
-
-    #         self.sense_id_dict = {}
-    #         self.lex_entry_dict = {}
-    #         self.synset_dict = {}
-
-    #         # edge_list is a list of dicts where values are source, type (of relationship), and target.
-    #         self.edge_list = []
 
 
 def main():
     graph_creator = ArangoDBGraphCreator()
     graph_creator.create_ArangoDB_WordNet_from_XML()
+    
+    ## If you need to create a certain collection, uncomment the following lines and edit the final one.
+    # print(f'{datetime.now()}: Starting process, creating db and collections')
+    # graph_creator.initiate_db_and_collections()
+    # print(f'{datetime.now()}: Created db and collections, creating relation type collection map')
+    # graph_creator.create_relation_type_collection_map()
+    # print(f'{datetime.now()}: Created relation type collection map, parsing XML')
+    # graph_creator.parse_xml('wn.xml',True,True)
+    # print(f'{datetime.now()}: Parsed XML, creating nodes and edges in ArangoDB')
+    # graph_creator.add_edges_to_collection(graph_creator.edge_collection, graph_creator.xml_parser.edge_list, graph_creator.relation_type_collection_map)
 
-    # conn = connect_to_arangodb()
-    # db = get_db(conn, 'wordnet_db')
-    # sense_id_collection = get_collection(db, 'sense_ids')
-    # lex_entry_collection = get_collection(db, 'lex_entries')
-    # synset_collection = get_collection(db, 'synsets')
-    # syntactic_behaviour_collection = get_collection(db, 'syntactic_behaviours')
-    # edge_collection = get_edge_collection(db, 'edges')
-
-    # parser = WordNetXMLParser('wn.xml')
-    # parser.parse()
-    # add_all_sense_ids(sense_id_collection, parser.sense_id_dict)
-    # add_all_lex_entries(lex_entry_collection, parser.lex_entry_dict)
-    # add_all_synsets(synset_collection, parser.synset_dict)
-    # add_all_syntactic_behaviours(syntactic_behaviour_collection, parser.syntactic_behaviour_dict)
-    # add_all_edges(edge_collection, parser.edge_list)
 
 
 if __name__ == '__main__':

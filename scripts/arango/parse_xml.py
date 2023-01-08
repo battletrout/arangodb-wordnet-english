@@ -1,7 +1,5 @@
 import xml.etree.ElementTree as ET
 
-
-
 class WordNetXMLParser:
     '''
     Created by Nathan Kemp on 6 Jan, 2023 to parse the Open English WordNet wn.xml file
@@ -143,8 +141,10 @@ class WordNetXMLParser:
                 self.add_edge(sense_id, lex_entry_id, 'lex_member_of', 'sense_to_lex_entry')
 
                 # add the sense to verb subcat relationship to the edge dict, if specified.
+                # 
                 if 'subcat' in child.attrib:
-                    self.add_edge(sense_id, child.attrib['subcat'], 'verb_subcat_of', 'sense_to_verb_subcat')
+                    for split_subcat in child.attrib['subcat'].split(' '):
+                        self.add_edge(sense_id, split_subcat, 'verb_subcat_of', 'sense_to_verb_subcat')
 
                 # check if the tag has any SenseRelationships or verb subcategories.
                 # if so, add to the edge dict.
@@ -215,6 +215,7 @@ class WordNetXMLParser:
         self.edge_list.append({'relCategory': relCategory, '_from': source, '_to': self.replace_disallowed_chars(target), '_type': relType})
 
     def print_all(self):
+        # for debugging
         print(self.wordnet_set_info)
         print()
         print(self.lex_entry_dict)
@@ -234,10 +235,6 @@ def main():
     # print(WordNetXMLParser.__doc__)
     parser.print_all()
 
-
-
 if __name__ == '__main__':
     main()
 
-# print(root[0][0].items())
-# print(root[0][0][0].tag, root[0][0][0].attrib)
