@@ -1,5 +1,18 @@
 # Scripts that make a property graph of Open English WordNet in ArangoDB from wn.xml
 
+## How to use 
+1. Initialize an ArangoDB Database (recommend https://hub.docker.com/_/arangodb), this was done with v3.10
+2. Run the two scripts from the Open English Wordnet team in the Usage section below to create the 'wn.xml' file that contains the entirety of the wordnet
+3. Create a user in your ArangoDB with read/write
+4. Edit your credentials in arango_connect.py 
+5. Import create_wn_graph_arango.py and run (took mine about 40 mins) 
+6. Open the ArangoDB web GUI and create a graph with the resulting collections
+
+## Things to do:
+- Add the capability to decide the direction of relationships ("has_member" instead of "member_of") depending on application
+- Add the different relationship types as different Edge collections, in case I want to only use certain sets of relationships in the graph, or create different graphs that deal with different relationships (i.e. synset and sense only to simplify traversal)
+
+
 ## Deviations from WordNet in the resulting ArangoDB:
 1. SenseIDs with disallowed characters are approximated to allowed characters (so far, ('`',"'") and ('ñ','n')). The unaltered SenseIDs are stored in the "id" parameter of the node. Per ArangoDB documentation https://www.arangodb.com/docs/stable/data-modeling-naming-conventions-document-keys.html, IDs:
 '''
