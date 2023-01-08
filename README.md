@@ -1,3 +1,7 @@
+# Scripts that make a property graph of Open English WordNet in ArangoDB from wn.xml
+
+Below is all from the original Open English WordNet repo at the time of fork:
+
 # Open English WordNet
 
 Open English WordNet is a lexical network of the English language grouping words into synsets and linking them according
