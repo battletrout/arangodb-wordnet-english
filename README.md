@@ -1,4 +1,5 @@
-# Scripts that make a property graph of Open English WordNet in ArangoDB from wn.xml
+# Make a property graph of Open English WordNet in ArangoDB
+![image](https://user-images.githubusercontent.com/49103526/211253395-06b80693-ed09-4096-ad52-ab315941f420.png)
 
 ## How to use 
 1. Initialize an ArangoDB Database (recommend https://hub.docker.com/_/arangodb), this was done with v3.10
