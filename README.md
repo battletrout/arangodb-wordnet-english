@@ -11,7 +11,8 @@
 ## Things to do:
 - Add the capability to decide the direction of relationships ("has_member" instead of "member_of") depending on application
 - Add the different relationship types as different Edge collections, in case I want to only use certain sets of relationships in the graph, or create different graphs that deal with different relationships (i.e. synset and sense only to simplify traversal)
-
+- Use Global Wordnet Association's XML forrmat DTD from http://globalwordnet.github.io/schemas/#xml 
+- Create a script to write WordNet to Neo4j databases 
 
 ## Deviations from WordNet in the resulting ArangoDB:
 1. SenseIDs with disallowed characters are approximated to allowed characters (so far, ('`',"'") and ('ñ','n')). The unaltered SenseIDs are stored in the "id" parameter of the node. Per ArangoDB documentation https://www.arangodb.com/docs/stable/data-modeling-naming-conventions-document-keys.html, IDs:
